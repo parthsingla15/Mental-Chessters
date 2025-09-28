@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mental Chessters - Choose Game Mode</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .mode-card {
+            backdrop-filter: blur(15px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 25px 45px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .mode-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            border-color: #FFD700;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.3), 0 0 40px rgba(255, 215, 0, 0.3);
+        }
+
+        .mode-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.1), transparent);
+            transition: left 0.6s ease;
+        }
+
+        .mode-card:hover::before {
+            left: 100%;
+        }
+
+        .chess-piece-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .mode-card:hover .chess-piece-icon {
+            transform: scale(1.1) rotate(5deg);
+        }
+
+        .title {
+            background: linear-gradient(45deg, #FFD700, #FFA500, #FFD700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
+        }
+
+        .online-gradient {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+
+        .offline-gradient {
+            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
+        }
+
+        .feature-badge {
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .floating-chess {
+            position: absolute;
+            opacity: 0.1;
+            animation: float 8s ease-in-out infinite;
+            z-index: 1;
+        }
+
+        .floating-chess:nth-child(odd) {
+            animation-duration: 6s;
+            animation-delay: -2s;
+        }
+
+        .floating-chess:nth-child(even) {
+            animation-duration: 10s;
+            animation-delay: -4s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            25% { transform: translateY(-15px) rotate(2deg); }
+            50% { transform: translateY(-25px) rotate(-2deg); }
+            75% { transform: translateY(-10px) rotate(1deg); }
+        }
+
+        .user-info {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 215, 0, 0.3); }
+            50% { box-shadow: 0 0 30px rgba(255, 215, 0, 0.5); }
+        }
+
+        .pulse-glow {
+            animation: pulse-glow 2s ease-in-out infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen p-4 lg:p-8 relative">
+        <!-- Floating Chess Pieces Background -->
+        <div class="floating-chess" style="top: 10%; left: 5%; font-size: 100px;"><i class="fas fa-chess-pawn text-white"></i></div>
+        <div class="floating-chess" style="top: 20%; right: 10%; font-size: 80px;"><i class="fas fa-chess-bishop text-white"></i></div>
+        <div class="floating-chess" style="bottom: 30%; left: 15%; font-size: 120px;"><i class="fas fa-chess-knight text-white"></i></div>
+        <div class="floating-chess" style="bottom: 10%; right: 20%; font-size: 90px;"><i class="fas fa-chess-rook text-white"></i></div>
+        <div class="floating-chess" style="top: 60%; left: 80%; font-size: 70px;"><i class="fas fa-chess-queen text-white"></i></div>
+
+        <!-- Header -->
+        <div class="text-center mb-12 relative z-10">
+            <h1 class="text-5xl lg:text-6xl font-bold title mb-4">
+                <i class="fas fa-chess-king mr-3"></i>
+                Choose Your Battle
+                <i class="fas fa-chess-queen ml-3"></i>
+            </h1>
+            <p class="text-white text-xl opacity-80">How would you like to play today?</p>
+            
+            <!-- User Info -->
+            <% if (typeof user !== 'undefined' && user) { %>
+            <div class="user-info mt-6 inline-block px-6 py-3 rounded-full">
+                <p class="text-white">
+                    <i class="fas fa-user mr-2 text-yellow-300"></i>
+                    Welcome back, <span class="font-semibold text-yellow-300"><%= user.username %></span>
+                </p>
+            </div>
+            <% } else { %>
+            <div class="user-info mt-6 inline-block px-6 py-3 rounded-full">
+                <p class="text-white">
+                    <i class="fas fa-user-secret mr-2 text-gray-300"></i>
+                    Playing as <span class="font-semibold text-gray-300">Guest</span>
+                </p>
+            </div>
+            <% } %>
+        </div>
+
+        <!-- Game Mode Cards -->
+        <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 relative z-10">
+            
+            <!-- Online Multiplayer Card -->
+            <div class="mode-card rounded-3xl p-8 text-center" onclick="selectGameMode('online')">
+                <div class="online-gradient w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 pulse-glow">
+                    <i class="chess-piece-icon fas fa-globe text-white"></i>
+                </div>
+                
+                <h2 class="text-3xl font-bold text-white mb-4">Online Multiplayer</h2>
+                <p class="text-white opacity-80 text-lg mb-6">
+                    Challenge players from around the world in real-time matches
+                </p>
+
+                <!-- Features -->
+                <div class="space-y-3 mb-8">
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm">
+                        <i class="fas fa-users mr-2 text-blue-300"></i>
+                        Real-time multiplayer
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm ml-2">
+                        <i class="fas fa-trophy mr-2 text-yellow-300"></i>
+                        Global leaderboard
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm">
+                        <i class="fas fa-comments mr-2 text-green-300"></i>
+                        Live chat
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm ml-2">
+                        <i class="fas fa-clock mr-2 text-purple-300"></i>
+                        Timed matches
+                    </div>
+                </div>
+
+                <!-- Stats -->
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-300">24</div>
+                        <div class="text-white opacity-70 text-sm">Players Online</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-300">1.2k</div>
+                        <div class="text-white opacity-70 text-sm">Games Today</div>
+                    </div>
+                </div>
+
+                <button class="online-gradient text-white font-semibold py-4 px-8 rounded-xl w-full transition-all hover:shadow-lg">
+                    <i class="fas fa-play mr-2"></i>
+                    Start Online Game
+                </button>
+            </div>
+
+            <!-- Offline Single Player Card -->
+            <div class="mode-card rounded-3xl p-8 text-center" onclick="selectGameMode('offline')">
+                <div class="offline-gradient w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 pulse-glow">
+                    <i class="chess-piece-icon fas fa-robot text-white"></i>
+                </div>
+                
+                <h2 class="text-3xl font-bold text-white mb-4">Offline Mode</h2>
+                <p class="text-white opacity-80 text-lg mb-6">
+                    Practice against AI or play locally with a friend on the same device
+                </p>
+
+                <!-- Features -->
+                <div class="space-y-3 mb-8">
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm">
+                        <i class="fas fa-brain mr-2 text-purple-300"></i>
+                        Smart AI opponent
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm ml-2">
+                        <i class="fas fa-cog mr-2 text-orange-300"></i>
+                        Adjustable difficulty
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm">
+                        <i class="fas fa-wifi-slash mr-2 text-gray-300"></i>
+                        No internet required
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm ml-2">
+                        <i class="fas fa-user-friends mr-2 text-pink-300"></i>
+                        Local multiplayer
+                    </div>
+                </div>
+
+                <!-- Difficulty Options -->
+                <div class="mb-6">
+                    <p class="text-white opacity-70 text-sm mb-3">Choose AI Difficulty:</p>
+                    <div class="flex justify-center space-x-2">
+                        <span class="px-3 py-1 bg-green-500 bg-opacity-20 text-green-300 rounded-full text-xs">Beginner</span>
+                        <span class="px-3 py-1 bg-yellow-500 bg-opacity-20 text-yellow-300 rounded-full text-xs">Intermediate</span>
+                        <span class="px-3 py-1 bg-red-500 bg-opacity-20 text-red-300 rounded-full text-xs">Expert</span>
+                        <span class="px-3 py-1 bg-purple-500 bg-opacity-20 text-purple-300 rounded-full text-xs">Master</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <button onclick="window.location='/game/ai/easy'" class="offline-gradient text-white font-semibold py-3 px-6 rounded-lg w-full transition-all hover:shadow-lg">
+                        <i class="fas fa-play mr-2"></i>
+                        Play vs AI
+                    </button>
+                    <button onclick="window.location='/game/offline'" class="bg-white bg-opacity-20 text-white font-medium py-2 px-6 rounded-lg w-full transition-all hover:bg-opacity-30">
+                        <i class="fas fa-users mr-2"></i>
+                        Local 2-Player
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Options -->
+        <div class="max-w-4xl mx-auto mt-12 text-center relative z-10">
+            <div class="grid md:grid-cols-3 gap-6">
+                <div class="mode-card rounded-2xl p-6" onclick="window.location='/tutorials'">
+                    <i class="fas fa-graduation-cap text-4xl text-blue-300 mb-4"></i>
+                    <h3 class="text-xl font-semibold text-white mb-2">Learn Chess</h3>
+                    <p class="text-white opacity-70 text-sm">Interactive tutorials and lessons</p>
+                </div>
+                
+                <div class="mode-card rounded-2xl p-6" onclick="window.location='/puzzles'">
+                    <i class="fas fa-puzzle-piece text-4xl text-green-300 mb-4"></i>
+                    <h3 class="text-xl font-semibold text-white mb-2">Chess Puzzles</h3>
+                    <p class="text-white opacity-70 text-sm">Solve tactical puzzles daily</p>
+                </div>
+                
+                <div class="mode-card rounded-2xl p-6" onclick="window.location='/analysis'">
+                    <i class="fas fa-chart-line text-4xl text-purple-300 mb-4"></i>
+                    <h3 class="text-xl font-semibold text-white mb-2">Game Analysis</h3>
+                    <p class="text-white opacity-70 text-sm">Analyze your past games</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Back Button -->
+        <div class="fixed top-6 left-6">
+            <button onclick="window.location='/login'" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-3 rounded-full backdrop-blur-md transition-all">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+        </div>
+
+        <!-- Settings Button -->
+        <div class="fixed top-6 right-6">
+            <button onclick="showSettings()" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-3 rounded-full backdrop-blur-md transition-all">
+                <i class="fas fa-cog"></i>
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-16 pb-8 relative z-10">
+            <p class="text-white opacity-50">
+                <i class="fas fa-chess-board mr-2"></i>
+                Mental Chessters - Where Strategy Meets Innovation
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function selectGameMode(mode) {
+            // Add loading state
+            const cards = document.querySelectorAll('.mode-card');
+            cards.forEach(card => {
+                card.style.opacity = '0.7';
+                card.style.pointerEvents = 'none';
+            });
+
+            // Add visual feedback
+            event.currentTarget.style.opacity = '1';
+            event.currentTarget.style.transform = 'scale(1.05)';
+            event.currentTarget.style.borderColor = '#FFD700';
+
+            // Navigate based on mode
+            setTimeout(() => {
+                if (mode === 'online') {
+                    window.location.href = '/game/online';
+                } else if (mode === 'offline') {
+                    window.location.href = '/game/offline';
+                }
+            }, 500);
+        }
+
+        function showSettings() {
+            alert('Settings panel coming soon!');
+        }
+
+        // Add entrance animations
+        document.addEventListener('DOMContentLoaded', function() {
+            const cards = document.querySelectorAll('.mode-card');
+            cards.forEach((card, index) => {
+                card.style.opacity = '0';
+                card.style.transform = 'translateY(50px)';
+                
+                setTimeout(() => {
+                    card.style.transition = 'all 0.6s ease';
+                    card.style.opacity = '1';
+                    card.style.transform = 'translateY(0)';
+                }, index * 200);
+            });
+
+            // Add hover sound effect placeholder
+            cards.forEach(card => {
+                card.addEventListener('mouseenter', function() {
+                    // You can add sound effects here
+                    this.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>

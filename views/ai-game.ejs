@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mental Chessters - AI Chess Game</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .game-container {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            grid-template-rows: repeat(8, minmax(0, 1fr));
+            width: 480px;
+            height: 480px;
+            border: 6px solid #8B4513;
+            border-radius: 12px;
+            box-shadow: 
+                0 0 0 3px #D4AF37,
+                0 20px 40px rgba(0, 0, 0, 0.3),
+                inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+        }
+
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.2s ease;
+        }
+
+        .square.light {
+            background: linear-gradient(135deg, #f0d9b5 0%, #e8d1a6 100%);
+        }
+
+        .square.dark {
+            background: linear-gradient(135deg, #b58863 0%, #a67c52 100%);
+        }
+
+        .square:hover {
+            box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.3);
+        }
+
+        .square.highlight {
+            box-shadow: inset 0 0 30px rgba(255, 215, 0, 0.6);
+            border: 2px solid #FFD700;
+        }
+
+        .piece {
+            font-size: 42px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            user-select: none;
+        }
+
+        .piece.white {
+            color: #ffffff;
+            filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.8));
+        }
+
+        .piece.black {
+            color: #2c2c2c;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6));
+        }
+
+        .status-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .title {
+            background: linear-gradient(45deg, #FFD700, #FFA500, #FFD700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .ai-thinking {
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @media (max-width: 768px) {
+            .chessboard {
+                width: 320px;
+                height: 320px;
+            }
+            .piece {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen p-4 lg:p-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-5xl lg:text-6xl font-bold title mb-2">
+                <i class="fas fa-robot mr-3"></i>
+                AI Chess Battle
+                <i class="fas fa-brain ml-3"></i>
+            </h1>
+            <p class="text-white text-lg opacity-80">Challenge the AI - Difficulty: 
+                <span class="font-bold text-yellow-300 uppercase"><%= difficulty %></span>
+            </p>
+            
+            <% if (typeof user !== 'undefined' && user) { %>
+            <p class="text-yellow-300 mt-2">
+                <i class="fas fa-user mr-1"></i>
+                Playing as <%= user.username %>
+            </p>
+            <% } %>
+        </div>
+
+        <!-- Main Game Container -->
+        <div class="flex flex-col lg:flex-row items-center justify-center gap-8 max-w-7xl mx-auto">
+            <!-- Game Status Panel -->
+            <div class="status-panel p-6 w-full lg:w-80">
+                <h3 class="text-white text-xl font-semibold mb-4 text-center">
+                    <i class="fas fa-info-circle mr-2"></i>Game Status
+                </h3>
+                
+                <!-- Players -->
+                <div class="mb-6">
+                    <div class="p-3 rounded-lg bg-blue-500 bg-opacity-20 mb-2">
+                        <div class="flex items-center justify-between">
+                            <span class="text-white font-medium">
+                                <i class="fas fa-user mr-2"></i>You (White)
+                            </span>
+                            <div class="w-4 h-4 bg-white rounded-full"></div>
+                        </div>
+                    </div>
+                    <div class="p-3 rounded-lg bg-red-500 bg-opacity-20">
+                        <div class="flex items-center justify-between">
+                            <span class="text-white font-medium">
+                                <i class="fas fa-robot mr-2"></i>AI (Black)
+                            </span>
+                            <div class="w-4 h-4 bg-gray-800 rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Info -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center text-white">
+                        <span class="opacity-80">Difficulty:</span>
+                        <span class="font-semibold text-yellow-300"><%= difficulty %></span>
+                    </div>
+                    <div class="flex justify-between items-center text-white">
+                        <span class="opacity-80">Turn:</span>
+                        <span class="font-semibold" id="currentTurn">White to move</span>
+                    </div>
+                    <div class="flex justify-between items-center text-white">
+                        <span class="opacity-80">Status:</span>
+                        <span class="font-semibold text-green-400" id="gameStatus">In Progress</span>
+                    </div>
+                </div>
+
+                <!-- AI Status -->
+                <div class="mt-6 p-3 bg-purple-500 bg-opacity-20 rounded-lg" id="aiStatusPanel">
+                    <div class="flex items-center text-purple-300" id="aiStatus">
+                        <div class="w-2 h-2 bg-purple-400 rounded-full mr-2"></div>
+                        <span class="text-sm font-medium">AI Ready</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chessboard -->
+            <div class="game-container p-8 rounded-3xl">
+                <div class="chessboard" id="chessboard">
+                    <!-- Squares will be generated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Move History Panel -->
+            <div class="status-panel p-6 w-full lg:w-80">
+                <h3 class="text-white text-xl font-semibold mb-4 text-center">
+                    <i class="fas fa-history mr-2"></i>Move History
+                </h3>
+                <div class="max-h-64 overflow-y-auto" id="moveHistory">
+                    <p class="text-white opacity-60 text-center">Make your first move!</p>
+                </div>
+                
+                <!-- Game Controls -->
+                <div class="mt-6 space-y-2">
+                    <button id="newGameBtn" class="w-full bg-green-500 bg-opacity-20 hover:bg-opacity-30 text-green-300 py-2 px-4 rounded-lg transition-all">
+                        <i class="fas fa-plus mr-2"></i>New Game
+                    </button>
+                    <button id="undoBtn" class="w-full bg-yellow-500 bg-opacity-20 hover:bg-opacity-30 text-yellow-300 py-2 px-4 rounded-lg transition-all">
+                        <i class="fas fa-undo mr-2"></i>Undo Move
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Back Button -->
+        <div class="fixed top-6 left-6">
+            <button onclick="window.location='/game-mode'" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-3 rounded-full backdrop-blur-md transition-all">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script>
+        const game = new Chess();
+        const difficulty = '<%= difficulty %>';
+        let isPlayerTurn = true;
+        let gameBoard = document.getElementById('chessboard');
+        
+        // Initialize the chess board
+        function initBoard() {
+            gameBoard.innerHTML = '';
+            
+            for (let row = 0; row < 8; row++) {
+                for (let col = 0; col < 8; col++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(row + col) % 2 === 0 ? 'light' : 'dark'}`;
+                    square.dataset.square = String.fromCharCode(97 + col) + (8 - row);
+                    
+                    // Add piece if exists
+                    const piece = game.get(square.dataset.square);
+                    if (piece) {
+                        square.innerHTML = getPieceUnicode(piece);
+                    }
+                    
+                    square.addEventListener('click', handleSquareClick);
+                    gameBoard.appendChild(square);
+                }
+            }
+        }
+        
+        function getPieceUnicode(piece) {
+            const pieces = {
+                'K': '♔', 'Q': '♕', 'R': '♖', 'B': '♗', 'N': '♘', 'P': '♙',
+                'k': '♚', 'q': '♛', 'r': '♜', 'b': '♝', 'n': '♞', 'p': '♟'
+            };
+            const symbol = piece.color === 'w' ? piece.type.toUpperCase() : piece.type.toLowerCase();
+            return `<span class="piece ${piece.color === 'w' ? 'white' : 'black'}">${pieces[symbol]}</span>`;
+        }
+        
+        let selectedSquare = null;
+        
+        function handleSquareClick(e) {
+            if (!isPlayerTurn) return;
+            
+            const square = e.currentTarget.dataset.square;
+            
+            if (selectedSquare === null) {
+                const piece = game.get(square);
+                if (piece && piece.color === 'w') {
+                    selectedSquare = square;
+                    e.currentTarget.classList.add('highlight');
+                }
+            } else {
+                // Try to make move
+                const move = game.move({
+                    from: selectedSquare,
+                    to: square,
+                    promotion: 'q' // Always promote to queen
+                });
+                
+                if (move) {
+                    updateMoveHistory(move);
+                    updateBoard();
+                    updateGameStatus();
+                    
+                    if (!game.game_over()) {
+                        makeAIMove();
+                    }
+                } else {
+                    // Invalid move, try selecting new piece
+                    clearSelection();
+                    const piece = game.get(square);
+                    if (piece && piece.color === 'w') {
+                        selectedSquare = square;
+                        e.currentTarget.classList.add('highlight');
+                    }
+                }
+            }
+        }
+        
+        function clearSelection() {
+            selectedSquare = null;
+            document.querySelectorAll('.square').forEach(sq => {
+                sq.classList.remove('highlight');
+            });
+        }
+        
+        async function makeAIMove() {
+            isPlayerTurn = false;
+            updateAIStatus('AI is thinking...', true);
+            
+            try {
+                const response = await fetch('/api/ai-move', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        fen: game.fen(),
+                        difficulty: difficulty
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (data.move) {
+                    setTimeout(() => {
+                        const move = game.move(data.move);
+                        if (move) {
+                            updateMoveHistory(move);
+                            updateBoard();
+                            updateGameStatus();
+                        }
+                        
+                        updateAIStatus('AI Ready', false);
+                        isPlayerTurn = true;
+                    }, 1000); // Add thinking delay
+                } else {
+                    updateAIStatus('AI Error', false);
+                    isPlayerTurn = true;
+                }
+            } catch (error) {
+                console.error('AI move error:', error);
+                updateAIStatus('AI Error', false);
+                isPlayerTurn = true;
+            }
+        }
+        
+        function updateAIStatus(status, thinking) {
+            const aiStatus = document.getElementById('aiStatus');
+            const indicator = aiStatus.querySelector('.w-2');
+            
+            aiStatus.querySelector('span').textContent = status;
+            
+            if (thinking) {
+                indicator.classList.add('ai-thinking');
+            } else {
+                indicator.classList.remove('ai-thinking');
+            }
+        }
+        
+        function updateBoard() {
+            clearSelection();
+            initBoard();
+        }
+        
+        function updateMoveHistory(move) {
+            const historyDiv = document.getElementById('moveHistory');
+            const moveDiv = document.createElement('div');
+            moveDiv.className = 'text-white text-sm py-1';
+            moveDiv.textContent = `${Math.ceil(game.history().length / 2)}. ${move.san}`;
+            historyDiv.appendChild(moveDiv);
+            historyDiv.scrollTop = historyDiv.scrollHeight;
+        }
+        
+        function updateGameStatus() {
+            const currentTurn = document.getElementById('currentTurn');
+            const gameStatus = document.getElementById('gameStatus');
+            
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    gameStatus.textContent = game.turn() === 'w' ? 'Black Wins!' : 'White Wins!';
+                    gameStatus.className = 'font-semibold text-red-400';
+                } else {
+                    gameStatus.textContent = 'Draw';
+                    gameStatus.className = 'font-semibold text-yellow-400';
+                }
+                currentTurn.textContent = 'Game Over';
+            } else {
+                currentTurn.textContent = game.turn() === 'w' ? 'White to move' : 'Black to move';
+                gameStatus.textContent = 'In Progress';
+            }
+        }
+        
+        // New Game button
+        document.getElementById('newGameBtn').addEventListener('click', () => {
+            game.reset();
+            isPlayerTurn = true;
+            updateBoard();
+            updateGameStatus();
+            document.getElementById('moveHistory').innerHTML = '<p class="text-white opacity-60 text-center">Make your first move!</p>';
+            updateAIStatus('AI Ready', false);
+        });
+        
+        // Undo button
+        document.getElementById('undoBtn').addEventListener('click', () => {
+            if (game.history().length >= 2) {
+                game.undo(); // Undo AI move
+                game.undo(); // Undo player move
+                updateBoard();
+                updateGameStatus();
+                isPlayerTurn = true;
+            }
+        });
+        
+        // Initialize game
+        initBoard();
+        updateGameStatus();
+    </script>
+</body>
+</html>

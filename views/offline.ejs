@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mental Chessters - Offline Chess</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        * {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .game-container {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+
+        .chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, minmax(0, 1fr));
+            grid-template-rows: repeat(8, minmax(0, 1fr));
+            width: 480px;
+            height: 480px;
+            border: 6px solid #8B4513;
+            border-radius: 12px;
+            box-shadow: 
+                0 0 0 3px #D4AF37,
+                0 20px 40px rgba(0, 0, 0, 0.3),
+                inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chessboard::before {
+            content: '';
+            position: absolute;
+            top: -2px;
+            left: -2px;
+            right: -2px;
+            bottom: -2px;
+            background: linear-gradient(45deg, #D4AF37, #FFD700, #D4AF37);
+            z-index: -1;
+            border-radius: 16px;
+        }
+
+        .square {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.2s ease;
+            cursor: pointer;
+        }
+
+        .square.light {
+            background: linear-gradient(135deg, #f0d9b5 0%, #e8d1a6 100%);
+        }
+
+        .square.dark {
+            background: linear-gradient(135deg, #b58863 0%, #a67c52 100%);
+        }
+
+        .square:hover {
+            box-shadow: inset 0 0 20px rgba(255, 215, 0, 0.3);
+            transform: scale(1.02);
+        }
+
+        .square.highlight {
+            box-shadow: inset 0 0 30px rgba(255, 215, 0, 0.6);
+            border: 2px solid #FFD700;
+        }
+
+        .square.possible-move {
+            box-shadow: inset 0 0 20px rgba(0, 255, 0, 0.4);
+            border: 2px solid #00FF00;
+        }
+
+        .square.selected {
+            box-shadow: inset 0 0 30px rgba(255, 0, 0, 0.6);
+            border: 2px solid #FF0000;
+        }
+
+        .piece {
+            font-size: 42px;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            user-select: none;
+            z-index: 10;
+        }
+
+        .piece.white {
+            color: #ffffff;
+            filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.8)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
+        }
+
+        .piece.black {
+            color: #2c2c2c;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.6)) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+        }
+
+        .piece:hover {
+            transform: scale(1.15) translateY(-2px);
+            filter: brightness(1.2) drop-shadow(0 8px 16px rgba(0, 0, 0, 0.4));
+        }
+
+        .status-panel {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .player-indicator {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .player-indicator.active {
+            border-color: #FFD700;
+            background: rgba(255, 215, 0, 0.1);
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.3);
+        }
+
+        .title {
+            background: linear-gradient(45deg, #FFD700, #FFA500, #FFD700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            text-shadow: 0 2px 10px rgba(255, 215, 0, 0.3);
+        }
+
+        .control-btn {
+            background: linear-gradient(45deg, #FFD700, #FFA500);
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            color: #2c2c2c;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 215, 0, 0.4);
+        }
+
+        .difficulty-selector {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 8px;
+            color: white;
+            padding: 0.5rem;
+        }
+
+        .coordinates {
+            position: absolute;
+            color: rgba(255, 255, 255, 0.6);
+            font-weight: 600;
+            font-size: 12px;
+            pointer-events: none;
+        }
+
+        .coord-file {
+            bottom: 4px;
+            right: 4px;
+        }
+
+        .coord-rank {
+            top: 4px;
+            left: 4px;
+        }
+
+        @media (max-width: 768px) {
+            .chessboard {
+                width: 320px;
+                height: 320px;
+            }
+            .piece {
+                font-size: 28px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="min-h-screen p-4 lg:p-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-4xl lg:text-5xl font-bold title mb-2">
+                <i class="fas fa-robot mr-2"></i>
+                Offline Chess
+                <i class="fas fa-brain ml-2"></i>
+            </h1>
+            <p class="text-white text-lg opacity-80">Practice against AI or play with a friend</p>
+            
+            <% if (typeof user !== 'undefined' && user) { %>
+            <p class="text-yellow-300 mt-2">
+                <i class="fas fa-user mr-1"></i>
+                Playing as <%= user.username %>
+            </p>
+            <% } else { %>
+            <p class="text-gray-300 mt-2">
+                <i class="fas fa-user-secret mr-1"></i>
+                Playing as Guest
+            </p>
+            <% } %>
+        </div>
+
+        <!-- Game Controls -->
+        <div class="max-w-7xl mx-auto mb-6">
+            <div class="flex flex-wrap justify-center gap-4">
+                <button class="control-btn" onclick="newGame()">
+                    <i class="fas fa-plus mr-2"></i>New Game
+                </button>
+                <button class="control-btn" onclick="undoMove()">
+                    <i class="fas fa-undo mr-2"></i>Undo
+                </button>
+                <button class="control-btn" onclick="toggleGameMode()">
+                    <i class="fas fa-exchange-alt mr-2"></i><span id="modeText">vs AI</span>
+                </button>
+                <select class="difficulty-selector" id="difficultySelect" onchange="changeDifficulty()">
+                    <option value="1">Beginner</option>
+                    <option value="2" selected>Intermediate</option>
+                    <option value="3">Advanced</option>
+                    <option value="4">Expert</option>
+                    <option value="5">Master</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Main Game Container -->
+        <div class="flex flex-col lg:flex-row items-center justify-center gap-8 max-w-7xl mx-auto">
+            <!-- Game Status Panel -->
+            <div class="status-panel p-6 w-full lg:w-80">
+                <h3 class="text-white text-xl font-semibold mb-4 text-center">
+                    <i class="fas fa-info-circle mr-2"></i>Game Status
+                </h3>
+                
+                <!-- Current Player -->
+                <div class="mb-6">
+                    <div class="player-indicator p-3 rounded-lg" id="whitePlayer">
+                        <div class="flex items-center justify-between">
+                            <span class="text-white font-medium">
+                                <i class="fas fa-chess-pawn mr-2"></i><span id="whitePlayerName">White Player</span>
+                            </span>
+                            <div class="w-4 h-4 bg-white rounded-full" id="whiteIndicator"></div>
+                        </div>
+                    </div>
+                    <div class="player-indicator p-3 rounded-lg mt-2" id="blackPlayer">
+                        <div class="flex items-center justify-between">
+                            <span class="text-white font-medium">
+                                <i class="fas fa-chess-pawn mr-2"></i><span id="blackPlayerName">AI Opponent</span>
+                            </span>
+                            <div class="w-4 h-4 bg-gray-800 rounded-full" id="blackIndicator"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Game Info -->
+                <div class="space-y-3">
+                    <div class="flex justify-between items-center text-white">
+                        <span class="opacity-80">Game Mode:</span>
+                        <span class="font-semibold" id="gameMode">vs AI</span>
+                    </div>
+                    <div class="flex justify-between items-center text-white">
+                        <span class="opacity-80">Turn:</span>
+                        <span class="font-semibold" id="currentTurn">White to move</span>
+                    </div>
+                    <div class="flex justify-between items-center text-white">
+                        <span class="opacity-80">Status:</span>
+                        <span class="font-semibold text-green-400" id="gameStatus">In Progress</span>
+                    </div>
+                    <div class="flex justify-between items-center text-white">
+                        <span class="opacity-80">Moves:</span>
+                        <span class="font-semibold" id="moveCount">0</span>
+                    </div>
+                </div>
+
+                <!-- AI Thinking -->
+                <div class="mt-6 p-3 bg-blue-500 bg-opacity-20 rounded-lg" id="aiThinking" style="display: none;">
+                    <div class="flex items-center text-blue-300">
+                        <div class="w-2 h-2 bg-blue-400 rounded-full mr-2 animate-pulse"></div>
+                        <span class="text-sm font-medium">AI is thinking...</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chessboard -->
+            <div class="game-container p-8 rounded-3xl">
+                <div class="chessboard" id="chessboard">
+                    <!-- Squares will be generated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Move History Panel -->
+            <div class="status-panel p-6 w-full lg:w-80">
+                <h3 class="text-white text-xl font-semibold mb-4 text-center">
+                    <i class="fas fa-history mr-2"></i>Move History
+                </h3>
+                <div class="max-h-64 overflow-y-auto" id="moveHistory">
+                    <p class="text-white opacity-60 text-center">Start a new game to begin</p>
+                </div>
+                
+                <!-- Game Statistics -->
+                <div class="mt-6 pt-4 border-t border-white border-opacity-20">
+                    <h4 class="text-white font-semibold mb-3">Statistics</h4>
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div class="text-center">
+                            <div class="text-xl font-bold text-green-400" id="wins">0</div>
+                            <div class="text-white opacity-70">Wins</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-xl font-bold text-red-400" id="losses">0</div>
+                            <div class="text-white opacity-70">Losses</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Back Button -->
+        <div class="fixed top-6 left-6">
+            <button onclick="window.location='/game-mode'" class="bg-white bg-opacity-20 hover:bg-opacity-30 text-white p-3 rounded-full backdrop-blur-md transition-all">
+                <i class="fas fa-arrow-left"></i>
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="text-center mt-8">
+            <p class="text-white opacity-60">
+                <i class="fas fa-robot mr-1"></i>
+                Offline Mode - No Internet Required
+            </p>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="/js/offline-chess.js"></script>
+</body>
+</html>
