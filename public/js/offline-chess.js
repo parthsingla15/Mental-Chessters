@@ -201,10 +201,10 @@ function minimax(game, depth, alpha, beta, maximizing) {
         let maxEval = -Infinity;
         for (let move of moves) {
             game.move(move);
-            const eval = minimax(game, depth - 1, alpha, beta, false);
+            const Eval = minimax(game, depth - 1, alpha, beta, false);
             game.undo();
-            maxEval = Math.max(maxEval, eval);
-            alpha = Math.max(alpha, eval);
+            maxEval = Math.max(maxEval, Eval);
+            alpha = Math.max(alpha, Eval);
             if (beta <= alpha) break;
         }
         return maxEval;
@@ -212,10 +212,10 @@ function minimax(game, depth, alpha, beta, maximizing) {
         let minEval = Infinity;
         for (let move of moves) {
             game.move(move);
-            const eval = minimax(game, depth - 1, alpha, beta, true);
+            const Eval = minimax(game, depth - 1, alpha, beta, true);
             game.undo();
-            minEval = Math.min(minEval, eval);
-            beta = Math.min(beta, eval);
+            minEval = Math.min(minEval, Eval);
+            beta = Math.min(beta, Eval);
             if (beta <= alpha) break;
         }
         return minEval;

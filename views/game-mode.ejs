@@ -159,7 +159,7 @@
         </div>
 
         <!-- Game Mode Cards -->
-        <div class="max-w-6xl mx-auto grid md:grid-cols-2 gap-8 relative z-10">
+        <div class="max-w-6xl mx-auto grid md:grid-cols-3 gap-8 relative z-10">
             
             <!-- Online Multiplayer Card -->
             <div class="mode-card rounded-3xl p-8 text-center" onclick="selectGameMode('online')">
@@ -263,6 +263,66 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Voice Chess Card -->
+            <div class="mode-card rounded-3xl p-8 text-center" onclick="selectGameMode('voice')">
+                <div class="bg-gradient-to-br from-purple-500 to-pink-500 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-6 pulse-glow">
+                    <i class="chess-piece-icon fas fa-microphone text-white"></i>
+                </div>
+                
+                <h2 class="text-3xl font-bold text-white mb-4">Voice Chess</h2>
+                <p class="text-white opacity-80 text-lg mb-6">
+                    Play chess using voice commands - speak your moves naturally!
+                </p>
+
+                <!-- Features -->
+                <div class="space-y-3 mb-8">
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm">
+                        <i class="fas fa-microphone mr-2 text-red-300"></i>
+                        Voice recognition
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm ml-2">
+                        <i class="fas fa-volume-up mr-2 text-blue-300"></i>
+                        Audio feedback
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm">
+                        <i class="fas fa-brain mr-2 text-purple-300"></i>
+                        Natural language
+                    </div>
+                    <div class="feature-badge px-4 py-2 rounded-full inline-flex items-center text-white text-sm ml-2">
+                        <i class="fas fa-accessibility mr-2 text-green-300"></i>
+                        Hands-free play
+                    </div>
+                </div>
+
+                <!-- Voice Examples -->
+                <div class="mb-6">
+                    <p class="text-white opacity-70 text-sm mb-3">Voice Examples:</p>
+                    <div class="space-y-1">
+                        <span class="block text-xs text-purple-300">"Pawn to e4"</span>
+                        <span class="block text-xs text-pink-300">"Knight to f3"</span>
+                        <span class="block text-xs text-blue-300">"Castle kingside"</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <button onclick="window.location='/game/voice/medium'" class="bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold py-3 px-6 rounded-lg w-full transition-all hover:shadow-lg">
+                        <i class="fas fa-microphone mr-2"></i>
+                        Start Voice Chess
+                    </button>
+                    <div class="flex space-x-2">
+                        <button onclick="window.location='/game/voice/easy'" class="bg-white bg-opacity-20 text-white font-medium py-2 px-3 rounded-lg flex-1 transition-all hover:bg-opacity-30">
+                            <span class="text-xs">Easy</span>
+                        </button>
+                        <button onclick="window.location='/game/voice/medium'" class="bg-white bg-opacity-20 text-white font-medium py-2 px-3 rounded-lg flex-1 transition-all hover:bg-opacity-30">
+                            <span class="text-xs">Medium</span>
+                        </button>
+                        <button onclick="window.location='/game/voice/hard'" class="bg-white bg-opacity-20 text-white font-medium py-2 px-3 rounded-lg flex-1 transition-all hover:bg-opacity-30">
+                            <span class="text-xs">Hard</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Additional Options -->
@@ -331,6 +391,8 @@
                     window.location.href = '/game/online';
                 } else if (mode === 'offline') {
                     window.location.href = '/game/offline';
+                } else if (mode === 'voice') {
+                    window.location.href = '/game/voice/medium';
                 }
             }, 500);
         }

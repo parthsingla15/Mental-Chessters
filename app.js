@@ -1,6 +1,8 @@
 const express = require('express');
 const socket = require('socket.io');
 const http = require('http');
+const https = require('https');
+const fs = require('fs');
 const { Chess } = require('chess.js');
 const path = require('path');
 const session = require('express-session');
@@ -8,8 +10,26 @@ const bodyParser = require('body-parser');
 const { log } = require('console');
 
 const app = express();
-const server = http.createServer(app);
-const io = socket(server);
+
+// Try to load SSL certificates
+let httpsOptions = null;
+try {
+    httpsOptions = {
+        key: fs.readFileSync('server.key'),
+        cert: fs.readFileSync('server.cert')
+    };
+    console.log('✅ SSL certificates found, HTTPS will be available');
+} catch (error) {
+    console.log('⚠️  SSL certificates not found, running HTTP only');
+    console.log('   Run "node generate-cert.js" to create certificates for voice recognition');
+}
+
+// Create both HTTP and HTTPS servers
+const httpServer = http.createServer(app);
+const httpsServer = httpsOptions ? https.createServer(httpsOptions, app) : null;
+
+// Use HTTPS server for Socket.IO if available, otherwise HTTP
+const io = socket(httpsServer || httpServer);
 
 const chess = new Chess();
 
@@ -103,6 +123,22 @@ app.get('/game/ai/:difficulty?', requireAuth, (req, res) => {
     });
 });
 
+// Voice Chess Integration
+app.get('/game/voice/:difficulty?', requireAuth, (req, res) => {
+    const difficulty = req.params.difficulty || 'medium';
+    
+    // Check if using HTTP and suggest HTTPS for better voice recognition
+    const isHTTPS = req.secure || req.get('x-forwarded-proto') === 'https';
+    
+    res.render('voice-game', { 
+        user: req.session.user, 
+        mode: 'voice',
+        difficulty: difficulty,
+        isHTTPS: isHTTPS,
+        httpsUrl: `https://${req.get('host').replace(':3001', ':3443')}${req.originalUrl}`
+    });
+});
+
 // Additional Game Features Routes
 app.get('/tutorials', (req, res) => {
     res.render('tutorials', { 
@@ -135,6 +171,52 @@ app.get('/api/stats', (req, res) => {
         activeTournaments: 3
     };
     res.json(stats);
+});
+
+// Voice Command Processing Endpoint
+app.post('/api/voice-command', requireAuth, (req, res) => {
+    const { command, fen } = req.body;
+    
+    try {
+        // Parse the voice command into chess notation
+        const move = parseVoiceCommand(command.toLowerCase());
+        
+        if (!move) {
+            return res.json({ 
+                success: false, 
+                error: 'Could not understand the command. Try saying something like "pawn to e4" or "knight to f3"',
+                parsedCommand: command
+            });
+        }
+        
+        // Validate the move using chess.js
+        const tempChess = new Chess(fen);
+        const validMove = tempChess.move(move);
+        
+        if (validMove) {
+            res.json({ 
+                success: true, 
+                move: validMove,
+                parsedCommand: command,
+                chessNotation: move
+            });
+        } else {
+            res.json({ 
+                success: false, 
+                error: `Invalid move: ${move}. Please try again.`,
+                parsedCommand: command,
+                chessNotation: move
+            });
+        }
+        
+    } catch (error) {
+        console.error('Voice command processing error:', error);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Failed to process voice command',
+            parsedCommand: command
+        });
+    }
 });
 
 // AI Move Generation Endpoint
@@ -236,6 +318,100 @@ io.on('connection', (uniqueSocket) => {
 
 
 
+// Voice Command Parsing Function
+function parseVoiceCommand(command) {
+    // Remove common filler words
+    command = command.replace(/\b(to|the|a|an)\b/g, '').trim();
+    
+    // Define piece name mappings
+    const pieceNames = {
+        'pawn': 'P',
+        'knight': 'N',
+        'bishop': 'B',
+        'rook': 'R',
+        'queen': 'Q',
+        'king': 'K',
+        'castle': 'O-O' // Special case for castling
+    };
+    
+    // Handle castling commands
+    if (command.includes('castle') || command.includes('castling')) {
+        if (command.includes('king') || command.includes('short')) {
+            return 'O-O';
+        } else if (command.includes('queen') || command.includes('long')) {
+            return 'O-O-O';
+        }
+        return 'O-O'; // Default to kingside
+    }
+    
+    // Handle special commands
+    if (command.includes('resign') || command.includes('surrender')) {
+        return null; // Handle resignation separately
+    }
+    
+    // Try to extract square notation (like "e4", "nf3", "qh5")
+    const squarePattern = /([a-h][1-8])/g;
+    const squares = command.match(squarePattern);
+    
+    if (squares && squares.length >= 1) {
+        let move = '';
+        
+        // Look for piece names in the command
+        for (const [pieceName, pieceSymbol] of Object.entries(pieceNames)) {
+            if (command.includes(pieceName)) {
+                if (pieceSymbol !== 'P') { // Don't add P for pawns
+                    move = pieceSymbol;
+                }
+                break;
+            }
+        }
+        
+        // If we have two squares, it's likely a from-to move
+        if (squares.length >= 2) {
+            return squares[0] + squares[1]; // e.g., "e2e4"
+        } else {
+            // Single square - piece to square (e.g., "Ne4", "e4")
+            move += squares[0];
+            return move;
+        }
+    }
+    
+    // Try to parse more natural language patterns
+    const patterns = [
+        // "pawn e4", "knight f3", etc.
+        /([a-z]+)\s+([a-h][1-8])/,
+        // "e2 to e4", "g1 to f3", etc.
+        /([a-h][1-8])\s+([a-h][1-8])/,
+        // Just a square like "e4"
+        /^([a-h][1-8])$/
+    ];
+    
+    for (const pattern of patterns) {
+        const match = command.match(pattern);
+        if (match) {
+            if (match.length === 3) {
+                const [, first, second] = match;
+                
+                // Check if first part is a piece name
+                if (pieceNames[first]) {
+                    const pieceSymbol = pieceNames[first];
+                    return pieceSymbol === 'P' ? second : pieceSymbol + second;
+                }
+                
+                // Check if it's two squares (from-to)
+                if (/^[a-h][1-8]$/.test(first) && /^[a-h][1-8]$/.test(second)) {
+                    return first + second;
+                }
+            } else if (match.length === 2) {
+                // Just a square
+                return match[1];
+            }
+        }
+    }
+    
+    return null; // Could not parse the command
+}
+
 // AI Chess Engine Functions
 function evaluatePosition(chess) {
     const pieceValues = {
@@ -325,26 +501,39 @@ function minimax(chess, depth, maximizingPlayer) {
         let maxEval = -Infinity;
         for (const move of moves) {
             chess.move(move);
-            const eval = minimax(chess, depth - 1, false);
+            const Eval = minimax(chess, depth - 1, false);
             chess.undo();
-            maxEval = Math.max(maxEval, eval);
+            maxEval = Math.max(maxEval, Eval);
         }
         return maxEval;
     } else {
         let minEval = Infinity;
         for (const move of moves) {
             chess.move(move);
-            const eval = minimax(chess, depth - 1, true);
+            const Eval = minimax(chess, depth - 1, true);
             chess.undo();
-            minEval = Math.min(minEval, eval);
+            minEval = Math.min(minEval, Eval);
         }
         return minEval;
     }
 }
 
-server.listen(3001, () => {
-    console.log('Mental Chessters server running on http://localhost:3001');
+// Start HTTP server
+httpServer.listen(3001, () => {
+    console.log('🌐 Mental Chessters HTTP server running on http://localhost:3001');
 });
+
+// Start HTTPS server if certificates are available
+if (httpsServer) {
+    httpsServer.listen(3443, () => {
+        console.log('🔒 Mental Chessters HTTPS server running on https://localhost:3443');
+        console.log('🎤 Use HTTPS URL for voice recognition to work properly!');
+        console.log('🔗 Voice Chess URL: https://localhost:3443');
+    });
+} else {
+    console.log('🚨 For voice recognition, generate SSL certificates with: node generate-cert.js');
+    console.log('💡 Then restart the server to enable HTTPS');
+}
 
 
 
