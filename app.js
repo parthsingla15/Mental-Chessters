@@ -175,45 +175,81 @@ app.get('/api/stats', (req, res) => {
 
 // Voice Command Processing Endpoint
 app.post('/api/voice-command', requireAuth, (req, res) => {
-    const { command, fen } = req.body;
-    
+    const { command, fen } = req.body || {};
+
+    // Basic input validation to avoid crashes
+    if (!command || typeof command !== 'string') {
+        return res.status(400).json({
+            success: false,
+            error: 'No voice command text received from client',
+            parsedCommand: command || null
+        });
+    }
+
+    if (!fen || typeof fen !== 'string') {
+        return res.status(400).json({
+            success: false,
+            error: 'No valid FEN position received from client',
+            parsedCommand: command,
+            fen: fen || null
+        });
+    }
+
     try {
         // Parse the voice command into chess notation
         const move = parseVoiceCommand(command.toLowerCase());
-        
+
         if (!move) {
-            return res.json({ 
-                success: false, 
+            return res.json({
+                success: false,
                 error: 'Could not understand the command. Try saying something like "pawn to e4" or "knight to f3"',
                 parsedCommand: command
             });
         }
-        
+
         // Validate the move using chess.js
-        const tempChess = new Chess(fen);
-        const validMove = tempChess.move(move);
-        
+        let tempChess;
+        try {
+            tempChess = new Chess(fen);
+        } catch (fenError) {
+            console.error('Invalid FEN received in /api/voice-command:', fen, fenError);
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid board position (FEN) from client',
+                parsedCommand: command,
+                fen: fen
+            });
+        }
+
+        let validMove;
+        try {
+            validMove = tempChess.move(move);
+        } catch (moveError) {
+            console.error('Error applying move in /api/voice-command:', move, moveError);
+            validMove = null;
+        }
+
         if (validMove) {
-            res.json({ 
-                success: true, 
+            return res.json({
+                success: true,
                 move: validMove,
                 parsedCommand: command,
                 chessNotation: move
             });
         } else {
-            res.json({ 
-                success: false, 
+            return res.json({
+                success: false,
                 error: `Invalid move: ${move}. Please try again.`,
                 parsedCommand: command,
                 chessNotation: move
             });
         }
-        
     } catch (error) {
-        console.error('Voice command processing error:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'Failed to process voice command',
+        console.error('Voice command processing error (unexpected):', error);
+        // Return a graceful error instead of 500 so client can show a message
+        return res.json({
+            success: false,
+            error: 'Failed to process voice command due to an internal error',
             parsedCommand: command
         });
     }
@@ -221,53 +257,91 @@ app.post('/api/voice-command', requireAuth, (req, res) => {
 
 // AI Move Generation Endpoint
 app.post('/api/ai-move', requireAuth, (req, res) => {
-    const { fen, difficulty = 'medium' } = req.body;
-    
+    const { fen, difficulty = 'medium' } = req.body || {};
+
+    // Validate input early to avoid 500s from bad data
+    if (!fen || typeof fen !== 'string') {
+        return res.status(400).json({
+            error: 'No valid FEN position received from client',
+            fen: fen || null,
+            difficulty
+        });
+    }
+
     try {
         // Create temporary chess instance to validate position
-        const tempChess = new Chess(fen);
+        let tempChess;
+        try {
+            tempChess = new Chess(fen);
+        } catch (fenError) {
+            console.error('Invalid FEN received in /api/ai-move:', fen, fenError);
+            return res.status(400).json({
+                error: 'Invalid board position (FEN) from client',
+                fen,
+                difficulty
+            });
+        }
+
         const possibleMoves = tempChess.moves();
-        
+
         if (possibleMoves.length === 0) {
-            return res.status(400).json({ error: 'No legal moves available' });
+            return res.status(400).json({ error: 'No legal moves available', fen, difficulty });
         }
-        
+
         let aiMove;
-        
-        switch(difficulty.toLowerCase()) {
-            case 'easy':
-                // Random move for easy mode
-                aiMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
-                break;
-                
-            case 'medium':
-                // Simple evaluation for medium mode
-                aiMove = getBestMove(tempChess, 1);
-                break;
-                
-            case 'hard':
-                // Deeper search for hard mode
-                aiMove = getBestMove(tempChess, 2);
-                break;
-                
-            case 'expert':
-                // Even deeper search for expert mode
-                aiMove = getBestMove(tempChess, 3);
-                break;
-                
-            default:
-                aiMove = getBestMove(tempChess, 1);
+
+        try {
+            switch(difficulty.toLowerCase()) {
+                case 'easy':
+                    // Random move for easy mode
+                    aiMove = possibleMoves[Math.floor(Math.random() * possibleMoves.length)];
+                    break;
+
+                case 'medium':
+                    // Shallow search for medium mode
+                    aiMove = getBestMove(tempChess, 2);
+                    break;
+
+                case 'hard':
+                    // Deeper search for hard mode
+                    aiMove = getBestMove(tempChess, 3);
+                    break;
+
+                case 'expert':
+                    // Even deeper search for expert mode (may be slower but much stronger)
+                    aiMove = getBestMove(tempChess, 4);
+                    break;
+
+                default:
+                    aiMove = getBestMove(tempChess, 2);
+            }
+        } catch (aiError) {
+            console.error('Error in getBestMove for /api/ai-move:', aiError);
+            return res.status(500).json({ error: 'AI search failed internally' });
         }
-        
-        res.json({ 
+
+        if (!aiMove) {
+            console.error('AI returned no move for FEN:', fen, 'difficulty:', difficulty);
+            return res.status(500).json({ error: 'AI failed to find a move' });
+        }
+
+        let evalScore;
+        try {
+            evalScore = evaluatePosition(tempChess);
+        } catch (evalError) {
+            console.error('Error in evaluatePosition for /api/ai-move:', evalError);
+            evalScore = null;
+        }
+
+        return res.json({
             move: aiMove,
-            difficulty: difficulty,
-            evaluation: evaluatePosition(tempChess)
+            difficulty,
+            evaluation: evalScore
         });
-        
+
     } catch (error) {
-        console.error('AI move generation error:', error);
-        res.status(500).json({ error: 'Failed to generate AI move' });
+        console.error('AI move generation error (unexpected):', error);
+        return res.status(500).json({ error: 'Failed to generate AI move due to an internal error' });
     }
 });
  
@@ -415,19 +489,19 @@ function parseVoiceCommand(command) {
 // AI Chess Engine Functions
 function evaluatePosition(chess) {
     const pieceValues = {
-        'p': 10, 'n': 30, 'b': 30, 'r': 50, 'q': 90, 'k': 900
+        'p': 100, 'n': 320, 'b': 330, 'r': 500, 'q': 900, 'k': 20000
     };
-    
+
     let score = 0;
     const board = chess.board();
-    
+
     for (let i = 0; i < 8; i++) {
         for (let j = 0; j < 8; j++) {
             const piece = board[i][j];
             if (piece) {
                 const value = pieceValues[piece.type];
                 const positionalValue = getPositionalValue(piece, i, j);
-                
+
                 if (piece.color === 'w') {
                     score += value + positionalValue;
                 } else {
@@ -436,83 +510,196 @@ function evaluatePosition(chess) {
             }
         }
     }
-    
+
+    // Basic game state bonuses/penalties
+    const isGameOver = (typeof chess.game_over === 'function' && chess.game_over()) ||
+                       (typeof chess.gameOver === 'function' && chess.gameOver());
+
+    const inCheckmate = (typeof chess.in_checkmate === 'function' && chess.in_checkmate()) ||
+                        (typeof chess.inCheckmate === 'function' && chess.inCheckmate());
+
+    if (isGameOver && inCheckmate) {
+        // If it's white to move and checkmated, big negative; if black to move, big positive
+        const MATE_SCORE = 100000; // large finite value (avoid Infinity which breaks JSON)
+        return chess.turn() === 'w' ? -MATE_SCORE : MATE_SCORE;
+    }
+
+    const inCheck = (typeof chess.in_check === 'function' && chess.in_check()) ||
+                    (typeof chess.inCheck === 'function' && chess.inCheck());
+
+    if (inCheck) {
+        // Being in check is mildly bad
+        score += chess.turn() === 'w' ? -50 : 50;
+    }
+
+    const inDraw = (typeof chess.in_draw === 'function' && chess.in_draw()) ||
+                   (typeof chess.inDraw === 'function' && chess.inDraw());
+    const inStalemate = (typeof chess.in_stalemate === 'function' && chess.in_stalemate()) ||
+                        (typeof chess.inStalemate === 'function' && chess.inStalemate());
+    const inThreefold = (typeof chess.in_threefold_repetition === 'function' && chess.in_threefold_repetition()) ||
+                        (typeof chess.inThreefoldRepetition === 'function' && chess.inThreefoldRepetition());
+
+    if (inDraw || inStalemate || inThreefold) {
+        // Neutral score for drawish positions
+        return 0;
+    }
+
     return score;
 }
 
 function getPositionalValue(piece, row, col) {
-    // Simple positional bonuses
+    // Simple positional bonuses (scaled to match new piece values)
     const centerControl = Math.abs(3.5 - row) + Math.abs(3.5 - col);
     let bonus = 0;
-    
+
     switch(piece.type) {
         case 'p':
-            // Pawns advance bonus
-            bonus = piece.color === 'w' ? (7 - row) : row;
+            // Pawns advance bonus (encourage pushing pawns, especially central ones)
+            bonus = (piece.color === 'w' ? (7 - row) : row) * 5;
             break;
         case 'n':
         case 'b':
             // Knights and bishops prefer center
-            bonus = 5 - centerControl;
+            bonus = (5 - centerControl) * 10;
             break;
         case 'q':
-            // Queen mobility
-            bonus = 2;
+            // Queen slight mobility bonus
+            bonus = 5;
+            break;
+        case 'r':
+            // Rooks a little better on open files (approximate by centralization)
+            bonus = (4 - Math.abs(3.5 - col)) * 5;
             break;
     }
-    
+
     return bonus;
 }
 
 function getBestMove(chess, depth) {
     const moves = chess.moves();
+
+    // If no legal moves, just return null and let caller handle game over
+    if (moves.length === 0) {
+        return null;
+    }
+
     let bestMove = moves[0];
     let bestScore = chess.turn() === 'w' ? -Infinity : Infinity;
-    
+
     for (const move of moves) {
         chess.move(move);
-        const score = minimax(chess, depth - 1, !chess.turn() === 'w');
+        // After making a move, it's the opponent's turn. We pass true if it's White to move.
+        const score = minimax(chess, depth - 1, chess.turn() === 'w', -Infinity, Infinity);
         chess.undo();
-        
+
         if (chess.turn() === 'w') {
+            // We are choosing a move for White: maximize score
             if (score > bestScore) {
                 bestScore = score;
                 bestMove = move;
             }
         } else {
+            // We are choosing a move for Black: minimize score
             if (score < bestScore) {
                 bestScore = score;
                 bestMove = move;
             }
         }
     }
-    
+
     return bestMove;
 }
 
-function minimax(chess, depth, maximizingPlayer) {
-    if (depth === 0 || chess.game_over()) {
-        return evaluatePosition(chess);
+// Minimax with alpha-beta pruning + simple quiescence search
+function minimax(chess, depth, maximizingPlayer, alpha, beta) {
+    const isGameOver = (typeof chess.game_over === 'function' && chess.game_over()) ||
+                       (typeof chess.gameOver === 'function' && chess.gameOver());
+
+    if (depth === 0 || isGameOver) {
+        // When depth is reached, do a small quiescence search on captures
+        return quiescence(chess, alpha, beta, maximizingPlayer);
     }
-    
+
     const moves = chess.moves();
-    
+
     if (maximizingPlayer) {
         let maxEval = -Infinity;
         for (const move of moves) {
             chess.move(move);
-            const Eval = minimax(chess, depth - 1, false);
+            const Eval = minimax(chess, depth - 1, false, alpha, beta);
             chess.undo();
             maxEval = Math.max(maxEval, Eval);
+            alpha = Math.max(alpha, Eval);
+            if (beta <= alpha) {
+                break; // beta cut-off
+            }
         }
         return maxEval;
     } else {
         let minEval = Infinity;
         for (const move of moves) {
             chess.move(move);
-            const Eval = minimax(chess, depth - 1, true);
+            const Eval = minimax(chess, depth - 1, true, alpha, beta);
             chess.undo();
             minEval = Math.min(minEval, Eval);
+            beta = Math.min(beta, Eval);
+            if (beta <= alpha) {
+                break; // alpha cut-off
+            }
+        }
+        return minEval;
+    }
+}
+
+// Quiescence search: extend search a bit in "noisy" positions (captures)
+function quiescence(chess, alpha, beta, maximizingPlayer) {
+    let standPat = evaluatePosition(chess);
+
+    if (maximizingPlayer) {
+        if (standPat >= beta) {
+            return standPat;
+        }
+        if (standPat > alpha) {
+            alpha = standPat;
+        }
+    } else {
+        if (standPat <= alpha) {
+            return standPat;
+        }
+        if (standPat < beta) {
+            beta = standPat;
+        }
+    }
+
+    // Only consider capture moves to stabilize evaluation
+    const captureMoves = chess.moves({ verbose: true }).filter(m => m.captured);
+
+    if (maximizingPlayer) {
+        let maxEval = standPat;
+        for (const move of captureMoves) {
+            chess.move(move);
+            const Eval = quiescence(chess, alpha, beta, false);
+            chess.undo();
+
+            maxEval = Math.max(maxEval, Eval);
+            alpha = Math.max(alpha, Eval);
+            if (beta <= alpha) {
+                break;
+            }
+        }
+        return maxEval;
+    } else {
+        let minEval = standPat;
+        for (const move of captureMoves) {
+            chess.move(move);
+            const Eval = quiescence(chess, alpha, beta, true);
+            chess.undo();
+
+            minEval = Math.min(minEval, Eval);
+            beta = Math.min(beta, Eval);
+            if (beta <= alpha) {
+                break;
+            }
         }
         return minEval;
     }
