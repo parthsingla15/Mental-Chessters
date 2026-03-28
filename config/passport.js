@@ -7,7 +7,7 @@ passport.deserializeUser((user, done) => done(null, user));
 passport.use(new GoogleStrategy({
     clientID:     process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL:  '/auth/google/callback'
+    callbackURL:  'https://mentalist.codes/auth/google/callback'
   },
   (accessToken, refreshToken, profile, done) => {
     const user = {
