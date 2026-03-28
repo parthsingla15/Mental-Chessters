@@ -1,6 +1,10 @@
+require('dotenv').config();
+console.log('CLIENT_ID:', process.env.GOOGLE_CLIENT_ID);    
 const express = require('express');
 const socket = require('socket.io');
 const http = require('http');
+                    // ADD
+const passport = require('./config/passport');     // ADD
 const https = require('https');
 const fs = require('fs');
 const { Chess } = require('chess.js');
@@ -45,7 +49,10 @@ app.use(session({
         secure: false, // Set to true in production with HTTPS
         maxAge: 24 * 60 * 60 * 1000 // 24 hours
     }
+    
 }));
+app.use(passport.initialize());
+app.use(passport.session());
 
 // Middleware
 app.set('view engine', 'ejs');
@@ -62,11 +69,11 @@ const users = {
 
 // Authentication middleware
 function requireAuth(req, res, next) {
-    if (req.session.user) {
-        next();
-    } else {
-        res.redirect('/login');
-    }
+  if (req.session.user || req.isAuthenticated()) {
+    next();
+  } else {
+    res.redirect('/login');
+  }
 }
 
 // Routes
@@ -81,6 +88,25 @@ app.get('/login', (req, res) => {
         res.render('login');
     }
 });
+
+// Google OAuth routes
+app.get('/auth/google',
+  passport.authenticate('google', { scope: ['profile', 'email'] })
+);
+
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  (req, res) => {
+    // Store Google user in session same format as your existing users
+    req.session.user = {
+      username: req.user.username,
+      email:    req.user.email,
+      photo:    req.user.photo,
+      provider: 'google'
+    };
+    res.redirect('/game-mode');
+  }
+);
 
 app.post('/login', (req, res) => {
     const { username, password } = req.body;
