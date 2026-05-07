@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chess Puzzles - Mental Chessters</title>
+    <meta name="description" content="Solve chess puzzles powered by Lichess.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { font-family: 'Poppins', sans-serif; }
+        body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+
+        .glass {
+            backdrop-filter: blur(15px);
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+        }
+        .title {
+            background: linear-gradient(45deg, #FFD700, #FFA500, #FFD700);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Board */
+        #chessboard {
+            display: grid;
+            grid-template-columns: repeat(8, 60px);
+            grid-template-rows: repeat(8, 60px);
+            border: 6px solid #8B4513;
+            border-radius: 8px;
+            box-shadow: 0 0 0 3px #D4AF37, 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .sq {
+            width: 60px; height: 60px;
+            display: flex; align-items: center; justify-content: center;
+            position: relative; cursor: pointer; font-size: 38px;
+            user-select: none; transition: box-shadow 0.15s;
+        }
+        .sq.light { background: #f0d9b5; }
+        .sq.dark  { background: #b58863; }
+        .sq.selected  { box-shadow: inset 0 0 0 4px #FFD700; }
+        .sq.last-from { background: rgba(155,199,0,0.41); }
+        .sq.last-to   { background: rgba(155,199,0,0.41); }
+        .sq.hint      { box-shadow: inset 0 0 0 4px #00aaff; }
+        .sq:hover     { box-shadow: inset 0 0 0 3px rgba(255,215,0,0.5); }
+
+        .wp { color: #fff;    text-shadow: 0 0 6px #000, 0 0 2px #000; }
+        .bp { color: #1a1a1a; text-shadow: 0 0 6px rgba(255,255,255,0.6); }
+
+        .coord { position:absolute; font-size:9px; font-weight:700; opacity:0.5; pointer-events:none; }
+        .coord-rank { top:2px; left:3px; }
+        .coord-file { bottom:2px; right:3px; }
+
+        @keyframes spin { to { transform:rotate(360deg); } }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes shake {
+            0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}
+        }
+        .shake { animation: shake 0.35s ease; }
+        @keyframes pop {
+            0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}
+        }
+        .pop { animation: pop 0.3s ease; }
+    </style>
+</head>
+<body>
+    <div class="fixed top-5 left-5 z-50">
+        <button onclick="window.location='/game-mode'"
+            class="glass text-white p-3 rounded-full hover:scale-110 transition-transform">
+            <i class="fas fa-arrow-left"></i>
+        </button>
+    </div>
+
+    <div class="min-h-screen p-4 pt-16 lg:pt-10">
+        <div class="text-center mb-8">
+            <h1 class="text-4xl lg:text-5xl font-bold title">
+                <i class="fas fa-puzzle-piece mr-2"></i>Chess Puzzles
+            </h1>
+            <p class="text-white opacity-70 mt-1">Powered by Lichess · Sharpen your tactics</p>
+            <% if (typeof user !== 'undefined' && user) { %>
+            <p class="text-yellow-300 text-sm mt-1"><i class="fas fa-user mr-1"></i><%= user.username %></p>
+            <% } %>
+        </div>
+
+        <div class="max-w-6xl mx-auto flex flex-col lg:flex-row gap-6 items-start justify-center">
+
+            <!-- LEFT: Info Panel -->
+            <div class="glass rounded-2xl p-5 w-full lg:w-64 flex-shrink-0">
+                <h2 class="text-white font-semibold mb-4 flex items-center gap-2">
+                    <i class="fas fa-info-circle text-yellow-300"></i> Puzzle Info
+                </h2>
+
+                <div id="statusMsg" class="bg-black bg-opacity-20 rounded-xl px-3 py-3 text-center text-white text-sm font-medium mb-4 min-h-[44px] flex items-center justify-center gap-2">
+                    <i class="fas fa-spinner spin"></i> Loading…
+                </div>
+
+                <div class="space-y-2 text-sm text-white mb-5">
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Rating</span>
+                        <span class="font-bold text-yellow-300" id="infoRating">—</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Themes</span>
+                        <span class="font-semibold text-blue-300 text-right leading-tight max-w-[130px]" id="infoThemes">—</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="opacity-60">You play</span>
+                        <span class="font-semibold" id="infoColor">—</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="opacity-60">Progress</span>
+                        <span class="font-semibold" id="infoProgress">—</span>
+                    </div>
+                </div>
+
+                <div class="space-y-2">
+                    <button id="btnHint" onclick="doHint()"
+                        class="w-full bg-yellow-500 bg-opacity-20 hover:bg-opacity-30 text-yellow-300 py-2 px-3 rounded-lg text-sm transition-all hidden">
+                        <i class="fas fa-lightbulb mr-1"></i> Hint
+                    </button>
+                    <button id="btnReveal" onclick="doReveal()"
+                        class="w-full bg-red-500 bg-opacity-20 hover:bg-opacity-30 text-red-300 py-2 px-3 rounded-lg text-sm transition-all hidden">
+                        <i class="fas fa-eye mr-1"></i> Reveal Solution
+                    </button>
+                    <button id="btnNext" onclick="loadPuzzle()"
+                        class="w-full bg-green-500 bg-opacity-20 hover:bg-opacity-30 text-green-300 py-2 px-3 rounded-lg text-sm transition-all">
+                        <i class="fas fa-forward mr-1"></i> Next Puzzle
+                    </button>
+                </div>
+
+                <div class="mt-5 pt-4 border-t border-white border-opacity-20 text-center">
+                    <p class="text-white text-xs opacity-50 mb-2">Session</p>
+                    <div class="flex justify-around">
+                        <div><div class="text-green-300 font-bold text-lg" id="sCorrect">0</div><div class="text-white text-xs opacity-50">Solved</div></div>
+                        <div><div class="text-red-300 font-bold text-lg" id="sWrong">0</div><div class="text-white text-xs opacity-50">Failed</div></div>
+                        <div><div class="text-yellow-300 font-bold text-lg" id="sStreak">0</div><div class="text-white text-xs opacity-50">🔥</div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOARD -->
+            <div class="glass rounded-2xl p-5 flex flex-col items-center gap-3 flex-shrink-0">
+                <div id="chessboard"></div>
+                <p class="text-white opacity-40 text-xs">
+                    <a href="https://lichess.org/training" target="_blank" class="hover:opacity-80">
+                        <i class="fas fa-external-link-alt mr-1"></i>Puzzles by Lichess.org
+                    </a>
+                </p>
+            </div>
+
+            <!-- RIGHT: Move log -->
+            <div class="glass rounded-2xl p-5 w-full lg:w-64 flex-shrink-0">
+                <h2 class="text-white font-semibold mb-4 flex items-center gap-2">
+                    <i class="fas fa-list-ol text-purple-300"></i> Moves
+                </h2>
+                <div id="moveLog" class="space-y-1 max-h-72 overflow-y-auto text-sm">
+                    <p class="text-white opacity-40 text-center text-xs">Waiting for your move…</p>
+                </div>
+                <div class="mt-5 pt-4 border-t border-white border-opacity-20">
+                    <p class="text-white text-xs opacity-60 font-semibold mb-2">How to play</p>
+                    <ul class="text-white text-xs opacity-50 list-disc list-inside space-y-1">
+                        <li>Click a piece, then a destination</li>
+                        <li>Find the best move in the position</li>
+                        <li>Watch the opponent respond</li>
+                        <li>Use Hint if stuck</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- chess.js 0.10.3 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script>
+    const PIECE_UNICODE = {
+        wK:'♔', wQ:'♕', wR:'♖', wB:'♗', wN:'♘', wP:'♙',
+        bK:'♚', bQ:'♛', bR:'♜', bB:'♝', bN:'♞', bP:'♟'
+    };
+
+    let game        = new Chess();
+    let solution    = [];
+    let stepIndex   = 0;
+    let playerColor = 'w';
+    let selectedSq  = null;
+    let lastMove    = { from: null, to: null };
+    let busy        = false;   // prevent clicks during animations
+    let solved      = false;
+    let revealed    = false;
+
+    let sCorrect = 0, sWrong = 0, sStreak = 0;
+
+    // ─── Load Puzzle ─────────────────────────────────────────────────────────
+    async function loadPuzzle() {
+        solved = revealed = false;
+        stepIndex = 0; solution = []; selectedSq = null;
+        lastMove = { from: null, to: null };
+        busy = true;
+
+        setStatus('<i class="fas fa-spinner spin mr-1"></i> Loading…', '');
+        hide('btnHint'); hide('btnReveal');
+        setText('infoRating', '—');
+        setText('infoThemes', '—');
+        setText('infoColor', '—');
+        setText('infoProgress', '—');
+        clearLog();
+        renderEmpty();
+
+        try {
+            const res = await fetch('/api/puzzle/daily');
+if (!res.ok) throw new Error('Server error ' + res.status);
+const data = await res.json();
+
+console.log('[Puzzle] Raw API response:', JSON.stringify(data, null, 2));
+
+const pz = data.puzzle;
+if (!pz) throw new Error('No puzzle object in response');
+
+// Reconstruct FEN from PGN up to initialPly
+let fen;
+if (pz.initialFen) {
+    // some endpoints return it directly
+    fen = pz.initialFen;
+} else if (data.game && data.game.pgn) {
+    // rebuild position from PGN moves up to initialPly
+    const tempGame = new Chess();
+    const pgn = data.game.pgn;
+    const moves = pgn.split(' ').filter(m => m && !m.match(/^\d+\./));
+    const ply = data.puzzle.initialPly ?? moves.length;
+    for (let i = 0; i < ply; i++) {
+        if (moves[i]) tempGame.move(moves[i], { sloppy: true });
+    }
+    fen = tempGame.fen();
+} else {
+    throw new Error('Cannot determine FEN for puzzle');
+}
+
+if (!fen) throw new Error('No initialFen in puzzle');
+
+            solution = pz.solution || [];
+            if (solution.length === 0) throw new Error('No solution moves');
+
+            console.log('[Puzzle] FEN:', fen);
+            console.log('[Puzzle] Solution:', solution);
+
+            // Load position
+            game = new Chess(fen);
+            if (!game.fen()) throw new Error('chess.js rejected FEN: ' + fen);
+
+            // Player is the side that moves SECOND (after the opponent's first move)
+            // initialFen has the OPPONENT to move; player is the other colour
+            playerColor = game.turn() === 'w' ? 'b' : 'w';
+
+            // Update info panel
+            setText('infoRating', pz.rating ?? '?');
+            setText('infoThemes', (pz.themes || []).slice(0,4).join(', ') || '—');
+            document.getElementById('infoColor').innerHTML =
+                playerColor === 'w'
+                    ? '<span class="text-white">⬜ White</span>'
+                    : '<span class="text-gray-300">⬛ Black</span>';
+
+            renderBoard();
+            show('btnHint'); show('btnReveal');
+            updateProgress();
+
+            // Auto-play opponent's first move
+            setTimeout(() => playOpponentMove(), 750);
+
+        } catch (err) {
+            console.error('[Puzzle] Load error:', err);
+            setStatus('❌ ' + err.message, 'red');
+            busy = false;
+        }
+    }
+
+    // ─── Auto-play opponent move ──────────────────────────────────────────────
+    function playOpponentMove() {
+        if (stepIndex >= solution.length) {
+            busy = false;
+            return;
+        }
+
+        const uci  = solution[stepIndex];
+        const from = uci.slice(0, 2);
+        const to   = uci.slice(2, 4);
+        const promo = uci.length === 5 ? uci[4] : undefined;
+
+        const moveObj = { from, to };
+        if (promo) moveObj.promotion = promo;
+
+        const result = game.move(moveObj);
+        if (!result) {
+            // Try SAN fallback — shouldn't happen but guard against it
+            console.warn('[Puzzle] Opponent move failed for UCI:', uci);
+            busy = false;
+            setStatus('⚡ Find the best move!', 'yellow');
+            return;
+        }
+
+        console.log('[Puzzle] Opponent played:', result.san, '(UCI:', uci + ')');
+        lastMove = { from, to };
+        stepIndex++;
+
+        renderBoard();
+        updateProgress();
+        addMoveEntry(result.san, 'opponent');
+
+        setStatus('⚡ Find the best move!', 'yellow');
+        busy = false;
+    }
+
+    // ─── Handle square click ─────────────────────────────────────────────────
+    function handleClick(sq) {
+        if (busy || solved || revealed) return;
+        if (stepIndex >= solution.length) return;
+
+        const piece = game.get(sq);
+
+        if (!selectedSq) {
+            // Must pick own piece
+            if (piece && piece.color === playerColor) {
+                selectedSq = sq;
+                renderBoard();
+            }
+            return;
+        }
+
+        if (sq === selectedSq) {
+            selectedSq = null;
+            renderBoard();
+            return;
+        }
+
+        // Clicking another own piece → re-select
+        if (piece && piece.color === playerColor) {
+            selectedSq = sq;
+            renderBoard();
+            return;
+        }
+
+        // Attempt the move
+        submitMove(selectedSq, sq);
+    }
+
+    function submitMove(from, to) {
+        const expectedUci = solution[stepIndex];
+        const userUci     = from + to;
+
+        // Allow promotion variant (user clicks to-square; we know expected promotion letter)
+        const expectedBase = expectedUci.slice(0, 4);
+
+        if (userUci !== expectedBase) {
+            // Wrong move
+            selectedSq = null;
+            renderBoard();
+            setStatus('❌ Wrong move — try again!', 'red');
+            shakeBoard();
+            return;
+        }
+
+        // Correct — apply the move with any promotion from the solution
+        const promo   = expectedUci.length === 5 ? expectedUci[4] : undefined;
+        const moveObj = { from, to };
+        if (promo) moveObj.promotion = promo;
+
+        const result = game.move(moveObj);
+        if (!result) {
+            console.warn('[Puzzle] Player move failed:', from, to);
+            selectedSq = null;
+            renderBoard();
+            setStatus('❌ Illegal move — try again!', 'red');
+            return;
+        }
+
+        console.log('[Puzzle] Player played:', result.san);
+        lastMove   = { from, to };
+        selectedSq = null;
+        stepIndex++;
+
+        renderBoard();
+        updateProgress();
+        addMoveEntry(result.san, 'player');
+
+        if (stepIndex >= solution.length) {
+            // Puzzle complete
+            solved = true;
+            sCorrect++; sStreak++;
+            updateScore();
+            hide('btnHint'); hide('btnReveal');
+            setStatus('🎉 Puzzle Solved! Well done!', 'green');
+            animatePop();
+        } else {
+            setStatus('✅ Correct! Keep going…', 'green');
+            busy = true;
+            setTimeout(() => playOpponentMove(), 650);
+        }
+    }
+
+    // ─── Hint ─────────────────────────────────────────────────────────────────
+    function doHint() {
+        if (solved || revealed || busy) return;
+        const uci  = solution[stepIndex];
+        const from = uci.slice(0, 2);
+        const el   = document.querySelector(`[data-sq="${from}"]`);
+        if (el) {
+            el.classList.add('hint');
+            setTimeout(() => el.classList.remove('hint'), 1200);
+        }
+        setStatus('💡 Move the highlighted piece', 'blue');
+    }
+
+    // ─── Reveal ───────────────────────────────────────────────────────────────
+    function doReveal() {
+        if (solved || revealed || busy) return;
+        revealed = true;
+        sWrong++; sStreak = 0;
+        updateScore();
+        hide('btnHint'); hide('btnReveal');
+
+        let delay = 0;
+        for (let i = stepIndex; i < solution.length; i++) {
+            const uci  = solution[i];
+            const from = uci.slice(0, 2);
+            const to   = uci.slice(2, 4);
+            const promo = uci.length === 5 ? uci[4] : undefined;
+            setTimeout(() => {
+                const mo = { from, to };
+                if (promo) mo.promotion = promo;
+                const r = game.move(mo);
+                if (r) {
+                    lastMove = { from, to };
+                    renderBoard();
+                    addMoveEntry(r.san, i % 2 === 0 ? 'opponent' : 'player');
+                }
+            }, delay);
+            delay += 700;
+        }
+        setTimeout(() => {
+            setStatus('📖 Solution shown. Load the next puzzle!', 'purple');
+        }, delay + 100);
+    }
+
+    // ─── Render board ────────────────────────────────────────────────────────
+    function renderBoard() {
+        const board = document.getElementById('chessboard');
+        board.innerHTML = '';
+        const flipped = (playerColor === 'b');
+
+        for (let vr = 0; vr < 8; vr++) {
+            for (let vc = 0; vc < 8; vc++) {
+                const row = flipped ? 7 - vr : vr;
+                const col = flipped ? 7 - vc : vc;
+                const file = String.fromCharCode(97 + col);
+                const rank = 8 - row;
+                const sq   = file + rank;
+
+                const div = document.createElement('div');
+                div.className = 'sq ' + ((row + col) % 2 === 0 ? 'light' : 'dark');
+                div.dataset.sq = sq;
+
+                if (sq === selectedSq)        div.classList.add('selected');
+                if (sq === lastMove.from)     div.classList.add('last-from');
+                if (sq === lastMove.to)       div.classList.add('last-to');
+
+                // Coordinate labels
+                if (vc === 0) {
+                    const s = document.createElement('span');
+                    s.className = 'coord coord-rank';
+                    s.textContent = rank;
+                    div.appendChild(s);
+                }
+                if (vr === 7) {
+                    const s = document.createElement('span');
+                    s.className = 'coord coord-file';
+                    s.textContent = file;
+                    div.appendChild(s);
+                }
+
+                // Piece
+                const piece = game.get(sq);
+                if (piece) {
+                    const key = piece.color + piece.type.toUpperCase();
+                    const span = document.createElement('span');
+                    span.className = piece.color === 'w' ? 'wp' : 'bp';
+                    span.textContent = PIECE_UNICODE[key] || '?';
+                    div.appendChild(span);
+                }
+
+                div.addEventListener('click', () => handleClick(sq));
+                board.appendChild(div);
+            }
+        }
+    }
+
+    function renderEmpty() {
+        const board = document.getElementById('chessboard');
+        board.innerHTML = '';
+        for (let r = 0; r < 8; r++) {
+            for (let c = 0; c < 8; c++) {
+                const div = document.createElement('div');
+                div.className = 'sq ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+                board.appendChild(div);
+            }
+        }
+    }
+
+    // ─── UI helpers ──────────────────────────────────────────────────────────
+    const STATUS_COLORS = {
+        '':       'text-white',
+        yellow:   'text-yellow-300',
+        green:    'text-green-300',
+        red:      'text-red-300',
+        blue:     'text-blue-300',
+        purple:   'text-purple-300',
+    };
+    function setStatus(html, color) {
+        const el = document.getElementById('statusMsg');
+        el.className = 'bg-black bg-opacity-20 rounded-xl px-3 py-3 text-center text-sm font-medium mb-4 min-h-[44px] flex items-center justify-center gap-1 ' + (STATUS_COLORS[color] || 'text-white');
+        el.innerHTML = html;
+    }
+
+    function updateProgress() {
+        // Count only player moves (every other step starting from index 1)
+        const playerMoves = Math.ceil(solution.length / 2);
+        const done        = Math.floor(stepIndex / 2);
+        setText('infoProgress', done + ' / ' + playerMoves);
+    }
+
+    function addMoveEntry(san, who) {
+        const log = document.getElementById('moveLog');
+        if (log.querySelector('p')) log.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'flex items-center gap-2 py-1';
+        div.innerHTML = who === 'player'
+            ? `<i class="fas fa-check text-green-300 text-xs"></i><span class="text-green-200 text-sm">${san}</span><span class="text-white text-xs opacity-40">You</span>`
+            : `<i class="fas fa-robot text-purple-300 text-xs"></i><span class="text-white text-sm">${san}</span><span class="text-white text-xs opacity-40">Opp</span>`;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function clearLog() {
+        document.getElementById('moveLog').innerHTML = '<p class="text-white opacity-40 text-center text-xs">Waiting for your move…</p>';
+    }
+
+    function updateScore() {
+        setText('sCorrect', sCorrect);
+        setText('sWrong',   sWrong);
+        setText('sStreak',  sStreak);
+    }
+
+    function shakeBoard() {
+        const b = document.getElementById('chessboard');
+        b.classList.remove('shake');
+        void b.offsetWidth;
+        b.classList.add('shake');
+        setTimeout(() => b.classList.remove('shake'), 400);
+    }
+
+    function animatePop() {
+        const b = document.getElementById('chessboard');
+        b.classList.add('pop');
+        setTimeout(() => b.classList.remove('pop'), 300);
+    }
+
+    function show(id) { document.getElementById(id).classList.remove('hidden'); }
+    function hide(id) { document.getElementById(id).classList.add('hidden'); }
+    function setText(id, val) { document.getElementById(id).textContent = val; }
+
+    // Boot
+    loadPuzzle();
+    </script>
+</body>
+</html>

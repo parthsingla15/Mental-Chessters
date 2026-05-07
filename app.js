@@ -415,6 +415,46 @@ app.post('/api/ai-move', requireAuth, (req, res) => {
     }
 });
  
+// ─── Lichess Puzzle Proxy ───────────────────────────────────────────────────
+// Uses native fetch (Node 18+). Falls back to a built-in puzzle if Lichess
+// is unreachable so the page always works offline / in dev.
+app.get('/api/puzzle/daily', async (req, res) => {
+    const FALLBACK = {
+        puzzle: {
+            id: 'fallback',
+            rating: 1350,
+            themes: ['fork', 'middlegame'],
+            initialFen: 'r1bqkb1r/pppp1ppp/2n2n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK02R w KQkq - 4 4',
+            solution: ['e1g1', 'f6e4', 'd1e2', 'e4f2']
+        }
+    };
+
+    try {
+        if (typeof fetch === 'undefined') {
+            console.warn('⚠️  Native fetch not available. Serving fallback puzzle.');
+            return res.json(FALLBACK);
+        }
+
+        const response = await fetch('https://lichess.org/api/puzzle/next', {
+            headers: { 'Accept': 'application/json' },
+            signal: AbortSignal.timeout(8000)
+        });
+
+        if (!response.ok) throw new Error('Lichess responded with ' + response.status);
+
+        const data = await response.json();
+
+        // ✅ Reconstruct initialFen from PGN + initialPly
+        if (data.game?.pgn && data.puzzle?.initialPly !== undefined) {
+            const { Chess } = require('chess.js');
+            const tempGame = new Chess();
+
+            // PGN from lichess looks like "e4 e5 Nf3 Nc6 ..." (no move numbers)
+            const moves = data.game.pgn
+                .split(' ')
+                .filter(m => m && !m.match(/^\d+\./)); // remove "1." "2." etc
+// ────────────────────────────────────────────────────────────────────────────
+
 // Socket.IO for online multiplayer
 io.on('connection', (uniqueSocket) => {
     console.log('User connected:', uniqueSocket.id);
