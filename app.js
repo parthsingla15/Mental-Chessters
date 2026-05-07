@@ -444,15 +444,26 @@ app.get('/api/puzzle/daily', async (req, res) => {
 
         const data = await response.json();
 
-        // ✅ Reconstruct initialFen from PGN + initialPly
         if (data.game?.pgn && data.puzzle?.initialPly !== undefined) {
-            const { Chess } = require('chess.js');
             const tempGame = new Chess();
-
-            // PGN from lichess looks like "e4 e5 Nf3 Nc6 ..." (no move numbers)
             const moves = data.game.pgn
                 .split(' ')
-                .filter(m => m && !m.match(/^\d+\./)); // remove "1." "2." etc
+                .filter(m => m && !m.match(/^\d+\./));
+
+            const ply = data.puzzle.initialPly;
+            for (let i = 0; i < ply; i++) {
+                if (moves[i]) tempGame.move(moves[i], { sloppy: true });
+            }
+            data.puzzle.initialFen = tempGame.fen();  // ✅ inject FEN
+        }
+
+        return res.json(data);
+
+    } catch (err) {
+        console.error('Puzzle proxy error – serving fallback:', err.message);
+        return res.json(FALLBACK);
+    }
+});  // ✅ closing brace was missing!
 // ────────────────────────────────────────────────────────────────────────────
 
 // Socket.IO for online multiplayer
