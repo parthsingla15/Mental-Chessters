@@ -12,6 +12,8 @@ const path = require('path');
 const session = require('express-session');
 const bodyParser = require('body-parser');
 const { log } = require('console');
+const mongoose = require('mongoose');
+const User = require('./models/User');
 
 const app = express();
 
@@ -60,12 +62,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
-// Simple user store (in production, use a proper database)
-const users = {
-    'admin': { username: 'admin', password: 'password123' },
-    'player1': { username: 'player1', password: 'chess123' },
-    'guest': { username: 'guest', password: 'guest' }
-};
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/mentalchessters')
+    .then(() => console.log('✅ Connected to MongoDB successfully'))
+    .catch(err => console.error('❌ MongoDB connection error:', err));
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -108,17 +108,61 @@ app.get('/auth/google/callback',
   }
 );
 
-app.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    console.log('Login attempt:', { username, password });
-    
-    if (users[username] && users[username].password === password) {
-        req.session.user = users[username];
-        console.log('Login successful for:', username);
+app.get('/signup', (req, res) => {
+    if (req.session.user) {
         res.redirect('/game-mode');
     } else {
-        console.log('Login failed for:', username);
-        res.render('login', { error: 'Invalid credentials. Try: admin/password123, player1/chess123, or guest/guest' });
+        res.render('signup');
+    }
+});
+
+app.post('/signup', async (req, res) => {
+    const { username, password } = req.body;
+    
+    try {
+        // Check if user already exists
+        const existingUser = await User.findOne({ username });
+        if (existingUser) {
+            return res.render('signup', { error: 'Username is already taken' });
+        }
+        
+        // Create new user
+        const user = new User({ username, password });
+        await user.save();
+        
+        // Log them in automatically
+        req.session.user = { username: user.username, id: user._id };
+        res.redirect('/game-mode');
+    } catch (error) {
+        console.error('Signup error:', error);
+        res.render('signup', { error: 'Error creating account. Password might be too short.' });
+    }
+});
+
+app.post('/login', async (req, res) => {
+    const { username, password } = req.body;
+    console.log('Login attempt:', { username });
+    
+    try {
+        // Allow fallback to guest for testing purposes if you want
+        if (username === 'guest' && password === 'guest') {
+            req.session.user = { username: 'guest' };
+            return res.redirect('/game-mode');
+        }
+
+        const user = await User.findOne({ username });
+        
+        if (user && await user.comparePassword(password)) {
+            req.session.user = { username: user.username, id: user._id };
+            console.log('Login successful for:', username);
+            res.redirect('/game-mode');
+        } else {
+            console.log('Login failed for:', username);
+            res.render('login', { error: 'Invalid username or password' });
+        }
+    } catch (error) {
+        console.error('Login error:', error);
+        res.render('login', { error: 'An error occurred during login' });
     }
 });
 
